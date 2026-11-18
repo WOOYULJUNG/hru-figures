@@ -26,21 +26,18 @@
 (function () {
   var XI = [[-1.5, 0], [1.5, 0]], B = 1, PHI = 0.35, BOX = [-3.6, 3.6];
   var MODES = {
-    tilt: { n: "기울기 (Bu)", l: "입력 세기 b", min: 0, max: 1.2, step: 0.05, v: 0.9,
-            say: "입력이 있는 동안 지형 전체가 기울어요. 두 골짜기 바닥이 함께 옮겨 가고, 세면 왼쪽 골짜기가 사라져요." },
     pair: { n: "pair", l: "왼쪽 골짜기 점수", min: -8, max: 0, step: 0.5, v: -6,
             say: "입력이 골짜기마다 깊이를 따로 정해요. 바닥 위치는 그대로이고, 점수가 낮으면 왼쪽 골짜기가 꺼져요." },
     kick: { n: "kick", l: "미는 거리 k", min: -3, max: 3, step: 0.1, v: 2,
             say: "입력이 state를 한 번 밀고, 지형은 그대로예요. 민 자리에서 가까운 골짜기로 내려가요." }
   };
-  var st = { m: "tilt", x: -1.5, trail: [-1.5], on: false };
+  var st = { m: "pair", x: -1.5, trail: [-1.5], on: false };
   function S(on) { return st.m === "pair" && on ? [MODES.pair.v, 0] : [0, 0]; }
-  function T(on) { return st.m === "tilt" && on ? [MODES.tilt.v, 0] : [0, 0]; }
-  function E(x, on) { return HRU.energy2([x, 0], XI, B, S(on), T(on)); }
+  function E(x, on) { return HRU.energy2([x, 0], XI, B, S(on)); }
   function step(on) {
     var x = st.x;
     if (on && st.m === "kick") x += MODES.kick.v;
-    var y = HRU.target2([x, 0], XI, B, S(on))[0] + T(on)[0];
+    var y = HRU.target2([x, 0], XI, B, S(on))[0];
     st.x = y + PHI * (x - y); st.on = on;
     st.trail.push(st.x); if (st.trail.length > 8) st.trail.shift();
     draw();
@@ -97,7 +94,7 @@
   document.getElementById("go").addEventListener("click", function () { step(true); });
   document.getElementById("rest").addEventListener("click", function () { step(false); });
   document.getElementById("reset").addEventListener("click", function () { setMode(st.m); });
-  setMode("tilt"); HRU.onResize(draw);
+  setMode("pair"); HRU.onResize(draw);
 })();
 </script>
 </body>
