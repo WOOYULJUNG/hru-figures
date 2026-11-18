@@ -90,10 +90,11 @@
     HRU.dot(c, V.X(st.x[0]), V.Y(st.x[1]), 7, acc, HRU.css("--bg"), 2);
     var h = document.getElementById("hist"); h.innerHTML = "";
     st.hist.forEach(function (t) { h.insertAdjacentHTML("beforeend", '<span class="tk">' + t + '</span>'); });
-    var k = nearest(st.x), txt = "지형: token <b>" + st.last + "</b>. state는 <b>" + NM[k] + "</b> 골짜기에 있어요. ";
+    var k = nearest(st.x), txt = (kickOn ? "" : "<b>kick 꺼짐</b>. ") + "지형: token <b>" + st.last + "</b>. state는 <b>" + NM[k] + "</b> 골짜기에 있어요. ";
     if (st.write) txt += "w 다음이라 다음 bit를 써요.";
     else txt += "규칙상 기억할 bit는 <b>" + st.mem + "</b>" + (k === 2 ? "." : (k === st.mem ? ", 지키는 중이에요." : ", 잃었어요."));
     if (st.ans !== null) txt += " r의 답: <b>" + st.ans + "</b>" + (st.ans === st.mem ? " (정답)" : " (오답)");
+    if (!kickOn && st.ans !== null && st.ans !== st.mem) txt += " kick이 없으면 w 직후 state에 남은 이전 bit 쪽 잔여가 새 bit의 작은 점수 차이를 이겨서, 이전 골짜기로 다시 내려가요.";
     document.getElementById("say").innerHTML = txt;
   }
   HRU.seg(document.getElementById("tok"), ["w", "0", "1", "i", "r"].map(function (t) { return { k: t, n: t }; }), null, function (t) {
