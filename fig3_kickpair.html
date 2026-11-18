@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kick과 pair로 bit 기억하기</title>
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="row">
+    <span class="lbl">token 넣기</span>
+    <div class="seg" id="tok" role="group" aria-label="token"></div>
+    <button class="btn" id="reset">1을 기억한 상태로</button>
+    <button class="btn" id="rep0">0 네 번</button>
+    <button class="btn" id="w0">w 0 r (0 쓰고 읽기)</button>
+  </div>
+  <div class="row">
+    <span class="lbl">kick</span>
+    <div class="seg" id="kick" role="group" aria-label="kick 켜고 끄기"></div>
+    <span class="note">kick을 끄면 pair만 남아요. "1을 기억한 상태로" 다음 "w 0 r"을 눌러 비교해 보세요.</span>
+  </div>
+  <div class="fig">
+    <canvas id="map" aria-label="token의 에너지 지형"></canvas>
+    <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div class="lbl">넣은 token</div>
+      <div class="hist" id="hist"></div>
+      <div class="read" id="say"></div>
+      <div class="note">배경은 마지막 token의 지형이에요(진할수록 에너지가 낮음). 검은 점은 그 지형의 minimum, 빨간 선은 state가 지나온 길이에요.
+        token마다 state를 한 번 밀고(kick), 그 token의 입력 부분과 맞는 골짜기만 남긴 지형(pair)에서 내려가요.
+        pair는 i 다음의 bit에서도 들고 있던 골짜기를 남겨서, 반대 bit가 이어져도 기억이 버텨요. 쓰기에서는 kick이 state를 새 bit 쪽으로 밀어 줘요.</div>
+    </div>
+  </div>
+</div>
+<script src="common.js"></script>
+<script>
+(function () {
+  var XI = [[-1.5, 0], [1.5, 0], [0, 1.6]], NM = ["0", "1", "R"], B = 2, PHI = 0.2, BOX = [-3.2, 3.2, -1.6, 3.2];
+  // input part of each token as scores for patterns 0, 1, R (-beta |z_u - kappa_mu|^2, relative) and the kick B u
+  var SC = { w: [-20, -20, 0], "0": [2, 0, -20], "1": [0, 2, -20], i: [0, 0, -20], r: [0, 0, -20] };   // with this small bit preference the write needs the kick
+  var KICK = { w: [0, 0.8], "0": [-0.6, 0], "1": [0.6, 0], i: [0, 0], r: [0, 0] };
+  var st, kickOn = true;
+  function step(x, u) {
+    var k = kickOn ? KICK[u] : [0, 0], xp = [x[0] + k[0], x[1] + k[1]], y = HRU.target2(xp, XI, B, SC[u]);
+    return [y[0] + PHI * (xp[0] - y[0]), y[1] + PHI * (xp[1] - y[1])];
+  }
+  function nearest(x) { var b = 0, bd = Infinity; XI.forEach(function (p, k) { var d = (x[0] - p[0]) * (x[0] - p[0]) + (x[1] - p[1]) * (x[1] - p[1]); if (d < bd) { bd = d; b = k; } }); return b; }
+  function isMin(c, s) {
+    var w = HRU.weights2(c, XI, B, s), m = [0, 0], C = [0, 0, 0], k;
+    for (k = 0; k < 3; k++) { m[0] += w[k] * XI[k][0]; m[1] += w[k] * XI[k][1]; }
+    for (k = 0; k < 3; k++) { var dx = XI[k][0] - m[0], dy = XI[k][1] - m[1]; C[0] += w[k] * dx * dx; C[1] += w[k] * dx * dy; C[2] += w[k] * dy * dy; }
+    var a = 1 - 2 * B * C[0], d = 1 - 2 * B * C[2], b = -2 * B * C[1];
+    return a > 0 && a * d - b * b > 0;
+  }
+  function minima(u) {
+    var out = [];
+    XI.forEach(function (p) { [[0.07, 0.05], [-0.06, 0.08]].forEach(function (e) {
+      var c = [p[0] + e[0], p[1] + e[1]]; for (var i = 0; i < 300; i++) c = HRU.target2(c, XI, B, SC[u]);
+      if (isMin(c, SC[u]) && !out.some(function (q) { return Math.hypot(q[0] - c[0], q[1] - c[1]) < 1e-3; })) out.push(c);
+    }); });
+    return out;
+  }
+  function reset() {
+    var x = [1.5, 0]; for (var i = 0; i < 30; i++) x = step(x, "i");
+    st = { x: x, trail: [x], last: "i", mem: 1, write: false, hist: ["w", "1", "i"], ans: null }; draw();
+  }
+  function push(u) {
+    st.x = step(st.x, u); st.trail.push(st.x); if (st.trail.length > 8) st.trail.shift();
+    st.last = u; st.hist.push(u); if (st.hist.length > 14) st.hist.shift();
+    if (u === "w") st.write = true; else if (u === "0" || u === "1") { if (st.write) st.mem = +u; st.write = false; } else st.write = false;
+    st.ans = u === "r" ? (Math.hypot(st.x[0] - XI[0][0], st.x[1]) < Math.hypot(st.x[0] - XI[1][0], st.x[1]) ? 0 : 1) : null;
+    draw();
+  }
+  function run(seq) {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches, i = 0;
+    (function next() { if (i >= seq.length) return; push(seq[i++]); if (reduce) next(); else setTimeout(next, 450); })();
+  }
+  function draw() {
+    var ink = HRU.css("--ink"), acc = HRU.css("--accent");
+    var o = HRU.prep(document.getElementById("map"), (BOX[3] - BOX[2]) / (BOX[1] - BOX[0])), c = o.ctx, V = HRU.view(o.W, o.H, BOX);
+    HRU.heat(c, o.W, o.H, BOX, function (p) { return HRU.energy2(p, XI, B, SC[st.last]); });
+    minima(st.last).forEach(function (m) { HRU.dot(c, V.X(m[0]), V.Y(m[1]), 5, ink, HRU.css("--bg"), 2); });
+    XI.forEach(function (p, k) {
+      HRU.dot(c, V.X(p[0]), V.Y(p[1]), 9, null, ink, 2);
+      HRU.text(c, NM[k], V.X(p[0]) + 11, V.Y(p[1]) - 9, ink, 14, 700);
+    });
+    c.save(); c.strokeStyle = acc; c.lineWidth = 2; c.globalAlpha = 0.85; c.beginPath();
+    st.trail.forEach(function (p, i) { if (i) c.lineTo(V.X(p[0]), V.Y(p[1])); else c.moveTo(V.X(p[0]), V.Y(p[1])); }); c.stroke(); c.restore();
+    st.trail.slice(0, -1).forEach(function (p) { HRU.dot(c, V.X(p[0]), V.Y(p[1]), 3, HRU.css("--bg"), acc, 1.5); });
+    HRU.dot(c, V.X(st.x[0]), V.Y(st.x[1]), 7, acc, HRU.css("--bg"), 2);
+    var h = document.getElementById("hist"); h.innerHTML = "";
+    st.hist.forEach(function (t) { h.insertAdjacentHTML("beforeend", '<span class="tk">' + t + '</span>'); });
+    var k = nearest(st.x), txt = "지형: token <b>" + st.last + "</b>. state는 <b>" + NM[k] + "</b> 골짜기에 있어요. ";
+    if (st.write) txt += "w 다음이라 다음 bit를 써요.";
+    else txt += "규칙상 기억할 bit는 <b>" + st.mem + "</b>" + (k === 2 ? "." : (k === st.mem ? ", 지키는 중이에요." : ", 잃었어요."));
+    if (st.ans !== null) txt += " r의 답: <b>" + st.ans + "</b>" + (st.ans === st.mem ? " (정답)" : " (오답)");
+    document.getElementById("say").innerHTML = txt;
+  }
+  HRU.seg(document.getElementById("tok"), ["w", "0", "1", "i", "r"].map(function (t) { return { k: t, n: t }; }), null, function (t) {
+    push(t); Array.prototype.forEach.call(document.getElementById("tok").children, function (x) { x.setAttribute("aria-pressed", "false"); });
+  });
+  HRU.seg(document.getElementById("kick"), [{ k: "on", n: "켬" }, { k: "off", n: "끔" }], "on", function (k) { kickOn = k === "on"; reset(); });
+  document.getElementById("reset").addEventListener("click", reset);
+  document.getElementById("rep0").addEventListener("click", function () { run(["0", "0", "0", "0"]); });
+  document.getElementById("w0").addEventListener("click", function () { run(["w", "0", "i", "r"]); });
+  reset(); HRU.onResize(draw);
+})();
+</script>
+</body>
+</html>

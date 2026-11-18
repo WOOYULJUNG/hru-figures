@@ -1,0 +1,33 @@
+/* Shared look for the small HRU figures embedded in Notion: a quiet surface, one accent per variant. */
+:root {
+  --bg: #ffffff; --ink: #1b2330; --muted: #6b7685; --line: #d9dee6; --chip: #eef1f5;
+  --s: #2a78d6; --d: #eb6834; --o: #1baf7a; --accent: #c8432f; --map-lo: #1f4f8f; --map-hi: #f3f6fa;
+  font-family: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #191919; --ink: #e8ebef; --muted: #9aa4b2; --line: #343b45; --chip: #262b33;
+          --s: #3987e5; --d: #d95926; --o: #199e70; --accent: #ff7a5c; --map-lo: #7cb8ff; --map-hi: #1f242b; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.55; }
+.wrap { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 10px; max-width: 760px; margin: 0 auto; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.fig { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 560px) { .fig { grid-template-columns: minmax(0, 1fr); } }
+canvas { width: 100%; display: block; border-radius: 6px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button, .btn { font: inherit; font-size: 13px; background: var(--bg); color: var(--ink); border: 0; padding: 5px 11px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.btn { border: 1px solid var(--line); border-radius: 7px; }
+.btn:hover, .seg button:hover { background: var(--chip); }
+.seg button[aria-pressed="true"]:hover { background: var(--ink); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lbl { font-size: 12.5px; color: var(--muted); }
+.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
+.slider { display: grid; grid-template-columns: 70px minmax(0, 1fr) 42px; gap: 8px; align-items: center; font-size: 13px; }
+.slider input { width: 100%; accent-color: var(--accent); }
+.note { font-size: 13px; color: var(--muted); }
+.read { font-size: 13.5px; background: var(--chip); border-radius: 7px; padding: 8px 11px; }
+.tk { font-family: ui-monospace, Menlo, monospace; font-size: 12px; min-width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 5px; background: var(--chip); padding: 0 4px; }
+.hist { display: flex; flex-wrap: wrap; gap: 3px; min-height: 22px; }

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HRU 변형별 움직임</title>
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="row">
+    <span class="lbl">변형</span>
+    <div class="seg" id="var" role="group" aria-label="HRU 변형"></div>
+    <span class="note">지형을 누르면 출발점이 바뀌어요</span>
+  </div>
+  <div class="fig">
+    <canvas id="map" aria-label="에너지 지형과 경로"></canvas>
+    <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div class="read mono" id="eqA"></div>
+      <div id="sliders" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div class="lbl">경로를 따라 잰 에너지</div>
+      <canvas id="en" aria-label="에너지 변화"></canvas>
+      <div class="note" id="say"></div>
+    </div>
+  </div>
+</div>
+<script src="common.js"></script>
+<script>
+(function () {
+  var XI = [[0, 0], [3.2, 2.6]], B = 1, BOX = [-3.2, 4.6, -2.6, 4.2], STEPS = 18;
+  var st = { v: "O", x0: [-2.3, 1.9], a: 0.45, af: 1.6, as: 0.12, ao: 0.3, w: 0.85 };
+  var SL = {
+    S: [["a", "감쇠 a", 0.05, 2, 0.05]],
+    D: [["af", "빠른 방향", 0.05, 3, 0.05], ["as", "느린 방향", 0.01, 1, 0.01]],
+    O: [["ao", "감쇠 a", 0, 1.5, 0.05], ["w", "회전 ω", 0, 3.1, 0.05]]
+  };
+  var EQ = { S: "A = −a I", D: "A = diag(−a_fast, −a_slow)", O: "A = −a I + ω J" };
+  var SAY = {
+    S: "모든 방향이 같은 속도라 골짜기로 곧게 들어가요.",
+    D: "빠른 방향을 먼저 거의 다 가고, 느린 방향으로 천천히 내려가요.",
+    O: "골짜기 주위를 돌며 들어가요. 회전은 에너지 변화에서 빠져서, 돌면서도 에너지는 계속 줄어요."
+  };
+  function P() {                                   // e^A for the current variant
+    if (st.v === "S") { var e = Math.exp(-st.a); return [[e, 0], [0, e]]; }
+    if (st.v === "D") return [[Math.exp(-st.af), 0], [0, Math.exp(-st.as)]];
+    var r = Math.exp(-st.ao); return [[r * Math.cos(st.w), -r * Math.sin(st.w)], [r * Math.sin(st.w), r * Math.cos(st.w)]];
+  }
+  function path() {
+    var M = P(), xs = [st.x0.slice()];
+    for (var t = 0; t < STEPS; t++) {
+      var x = xs[xs.length - 1], y = HRU.target2(x, XI, B), d = [x[0] - y[0], x[1] - y[1]];
+      xs.push([y[0] + M[0][0] * d[0] + M[0][1] * d[1], y[1] + M[1][0] * d[0] + M[1][1] * d[1]]);
+    }
+    return xs;
+  }
+  function sliders() {
+    var host = document.getElementById("sliders"); host.innerHTML = "";
+    SL[st.v].forEach(function (s) {
+      var id = "sl-" + s[0];
+      host.insertAdjacentHTML("beforeend", '<div class="slider"><label for="' + id + '">' + s[1] + '</label><input type="range" id="' + id +
+        '" min="' + s[2] + '" max="' + s[3] + '" step="' + s[4] + '" value="' + st[s[0]] + '"><span class="mono" id="' + id + '-v">' + st[s[0]] + '</span></div>');
+      var el = document.getElementById(id);
+      el.addEventListener("input", function () { st[s[0]] = +el.value; document.getElementById(id + "-v").textContent = el.value; draw(); });
+    });
+  }
+  function draw() {
+    var col = HRU.css("--" + st.v.toLowerCase()), ink = HRU.css("--ink"), muted = HRU.css("--muted");
+    var o = HRU.prep(document.getElementById("map"), (BOX[3] - BOX[2]) / (BOX[1] - BOX[0])), c = o.ctx, V = HRU.view(o.W, o.H, BOX);
+    HRU.heat(c, o.W, o.H, BOX, function (p) { return HRU.energy2(p, XI, B); });
+    XI.forEach(function (p, k) { HRU.cross(c, V.X(p[0]), V.Y(p[1]), 6, ink); HRU.text(c, "ξ" + (k + 1), V.X(p[0]) + 8, V.Y(p[1]) - 8, ink, 13, 600); });
+    var xs = path();
+    c.save(); c.strokeStyle = col; c.lineWidth = 2.4; c.beginPath();
+    xs.forEach(function (p, i) { if (i) c.lineTo(V.X(p[0]), V.Y(p[1])); else c.moveTo(V.X(p[0]), V.Y(p[1])); }); c.stroke(); c.restore();
+    xs.slice(1).forEach(function (p) { HRU.dot(c, V.X(p[0]), V.Y(p[1]), 3.6, col, HRU.css("--bg"), 1); });
+    HRU.dot(c, V.X(st.x0[0]), V.Y(st.x0[1]), 6.5, HRU.css("--bg"), ink, 2);
+    HRU.text(c, "x₀", V.X(st.x0[0]) - 20, V.Y(st.x0[1]) - 8, ink, 13, 600);
+    // energy along the path
+    var q = HRU.prep(document.getElementById("en"), 0.45), g = q.ctx, Es = xs.map(function (p) { return HRU.energy2(p, XI, B); });
+    var mx = Math.max.apply(null, Es), mn = Math.min.apply(null, Es), pad = 18;
+    g.strokeStyle = HRU.css("--line"); g.lineWidth = 1; g.beginPath(); g.moveTo(pad, 4); g.lineTo(pad, q.H - pad); g.lineTo(q.W - 4, q.H - pad); g.stroke();
+    g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
+    Es.forEach(function (e, i) {
+      var x = pad + (q.W - pad - 8) * i / STEPS, y = 6 + (q.H - pad - 12) * (1 - (e - mn) / ((mx - mn) || 1));
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    }); g.stroke();
+    HRU.text(g, "step", q.W - 34, q.H - 4, muted, 11); HRU.text(g, "E", 2, 14, muted, 11);
+    document.getElementById("eqA").textContent = EQ[st.v];
+    document.getElementById("say").textContent = SAY[st.v];
+  }
+  HRU.seg(document.getElementById("var"), [{ k: "S", n: "HRU-S" }, { k: "D", n: "HRU-D" }, { k: "O", n: "HRU-O" }], st.v, function (k) { st.v = k; sliders(); draw(); });
+  document.getElementById("map").addEventListener("click", function (ev) {
+    var r = ev.target.getBoundingClientRect();
+    st.x0 = [BOX[0] + (ev.clientX - r.left) / r.width * (BOX[1] - BOX[0]), BOX[3] - (ev.clientY - r.top) / r.height * (BOX[3] - BOX[2])];
+    draw();
+  });
+  sliders(); draw(); HRU.onResize(draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HRU 입력 방식</title>
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="row">
+    <span class="lbl">입력 방식</span>
+    <div class="seg" id="mode" role="group" aria-label="입력 방식"></div>
+  </div>
+  <div class="slider" style="max-width:460px"><label for="amt" id="amt-l">세기</label><input type="range" id="amt"><span class="mono" id="amt-v"></span></div>
+  <canvas id="cv" aria-label="골짜기 두 개의 에너지"></canvas>
+  <div class="row">
+    <button class="btn" id="go">입력을 넣고 한 step</button>
+    <button class="btn" id="rest">입력 없이 한 step</button>
+    <button class="btn" id="reset">처음으로</button>
+  </div>
+  <div class="read" id="say"></div>
+</div>
+<script src="common.js"></script>
+<script>
+(function () {
+  var XI = [[-1.5, 0], [1.5, 0]], B = 1, PHI = 0.35, BOX = [-3.6, 3.6];
+  var MODES = {
+    tilt: { n: "기울기 (Bu)", l: "입력 세기 b", min: 0, max: 1.2, step: 0.05, v: 0.9,
+            say: "입력이 있는 동안 지형 전체가 기울어요. 두 골짜기 바닥이 함께 옮겨 가고, 세면 왼쪽 골짜기가 사라져요." },
+    pair: { n: "pair", l: "왼쪽 골짜기 점수", min: -8, max: 0, step: 0.5, v: -6,
+            say: "입력이 골짜기마다 깊이를 따로 정해요. 바닥 위치는 그대로이고, 점수가 낮으면 왼쪽 골짜기가 꺼져요." },
+    kick: { n: "kick", l: "미는 거리 k", min: -3, max: 3, step: 0.1, v: 2,
+            say: "입력이 state를 한 번 밀고, 지형은 그대로예요. 민 자리에서 가까운 골짜기로 내려가요." }
+  };
+  var st = { m: "tilt", x: -1.5, trail: [-1.5], on: false };
+  function S(on) { return st.m === "pair" && on ? [MODES.pair.v, 0] : [0, 0]; }
+  function T(on) { return st.m === "tilt" && on ? [MODES.tilt.v, 0] : [0, 0]; }
+  function E(x, on) { return HRU.energy2([x, 0], XI, B, S(on), T(on)); }
+  function step(on) {
+    var x = st.x;
+    if (on && st.m === "kick") x += MODES.kick.v;
+    var y = HRU.target2([x, 0], XI, B, S(on))[0] + T(on)[0];
+    st.x = y + PHI * (x - y); st.on = on;
+    st.trail.push(st.x); if (st.trail.length > 8) st.trail.shift();
+    draw();
+  }
+  function minima(on) {
+    var out = [], N = 1200, prev = E(BOX[0], on), cur = E(BOX[0] + 7.2 / N, on);
+    for (var i = 2; i <= N; i++) {
+      var x = BOX[0] + 7.2 * i / N, nxt = E(x, on);
+      if (cur < prev && cur < nxt) out.push(BOX[0] + 7.2 * (i - 1) / N);
+      prev = cur; cur = nxt;
+    }
+    return out;
+  }
+  function draw() {
+    var o = HRU.prep(document.getElementById("cv"), 0.42), c = o.ctx, W = o.W, H = o.H;
+    var ink = HRU.css("--ink"), muted = HRU.css("--muted"), line = HRU.css("--line"), acc = HRU.css("--accent"), dc = HRU.css("--d");
+    var lo = -1.6, hi = 3.0, X = function (x) { return 10 + (x - BOX[0]) / 7.2 * (W - 20); }, Y = function (e) { return 8 + (hi - e) / (hi - lo) * (H - 34); };
+    c.strokeStyle = line; c.lineWidth = 1; c.beginPath(); c.moveTo(6, H - 24); c.lineTo(W - 6, H - 24); c.stroke();
+    XI.forEach(function (p, k) {
+      c.setLineDash([2, 3]); c.beginPath(); c.moveTo(X(p[0]), 6); c.lineTo(X(p[0]), H - 24); c.stroke(); c.setLineDash([]);
+      HRU.text(c, "ξ" + k, X(p[0]) - 6, H - 6, ink, 13, 600);
+    });
+    function curve(on, color, dash, lw) {
+      c.save(); c.strokeStyle = color; c.lineWidth = lw; if (dash) c.setLineDash(dash); c.beginPath();
+      for (var i = 0; i <= 300; i++) { var x = BOX[0] + 7.2 * i / 300, y = Y(E(x, on)); if (i) c.lineTo(X(x), y); else c.moveTo(X(x), y); }
+      c.stroke(); c.restore();
+    }
+    var shown = st.m === "kick" ? false : true;
+    curve(false, line, [6, 4], 1.8);
+    if (shown) curve(true, ink, null, 2.4); else curve(false, ink, null, 2.4);
+    minima(shown).forEach(function (x) { HRU.dot(c, X(x), Y(E(x, shown)), 5, dc, HRU.css("--bg"), 1.5); });
+    if (st.m === "kick") {
+      var k = MODES.kick.v, a = X(st.x), b = X(st.x + k), yy = Y(E(st.x, false)) - 16;
+      c.strokeStyle = acc; c.lineWidth = 1.8; c.beginPath(); c.moveTo(a, yy); c.lineTo(b, yy); c.stroke();
+      c.beginPath(); c.moveTo(b, yy); c.lineTo(b - 7 * Math.sign(k || 1), yy - 4); c.lineTo(b - 7 * Math.sign(k || 1), yy + 4); c.closePath(); c.fillStyle = acc; c.fill();
+      HRU.text(c, "다음 kick", Math.min(a, b), yy - 6, acc, 11);
+    }
+    st.trail.slice(0, -1).forEach(function (x) { HRU.dot(c, X(x), Y(E(x, shown && st.on)), 3, null, acc, 1.5); });
+    HRU.dot(c, X(st.x), Y(E(st.x, shown && st.on)), 7, acc, HRU.css("--bg"), 2);
+    HRU.text(c, "실선: 입력이 있을 때   점선: 입력 없음   주황 점: minimum", 10, 18, muted, 11);
+    var well = st.x < 0 ? "ξ0" : "ξ1";
+    document.getElementById("say").textContent = MODES[st.m].say + " 지금 state는 " + well + " 쪽 (x = " + st.x.toFixed(2) + ")에 있어요.";
+  }
+  function setMode(m) {
+    st.m = m; var md = MODES[m], el = document.getElementById("amt");
+    el.min = md.min; el.max = md.max; el.step = md.step; el.value = md.v;
+    document.getElementById("amt-l").textContent = md.l; document.getElementById("amt-v").textContent = md.v;
+    st.x = -1.5; st.trail = [-1.5]; st.on = false; draw();
+  }
+  HRU.seg(document.getElementById("mode"), Object.keys(MODES).map(function (k) { return { k: k, n: MODES[k].n }; }), st.m, setMode);
+  document.getElementById("amt").addEventListener("input", function (ev) {
+    MODES[st.m].v = +ev.target.value; document.getElementById("amt-v").textContent = ev.target.value; draw();
+  });
+  document.getElementById("go").addEventListener("click", function () { step(true); });
+  document.getElementById("rest").addEventListener("click", function () { step(false); });
+  document.getElementById("reset").addEventListener("click", function () { setMode(st.m); });
+  setMode("tilt"); HRU.onResize(draw);
+})();
+</script>
+</body>
+</html>
